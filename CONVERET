@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="id"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Konverter KML ke CSV</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: satu kolom sempit seperti lembar survei. Zona taruh file di atas, hasil (pratinjau + CSV) di bawah. */
+:root {
+  --bg: #eef0ec;
+  --surface: #f9faf7;
+  --fg: #1c2a24;
+  --muted: #5d6b64;
+  --line: #cfd6cd;
+  --accent: #1f6b4f;
+  --accent-fg: #ffffff;
+  --accent-soft: #dcebe3;
+  --warn: #9a4a12;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121a16; --surface: #1a2420; --fg: #e4ebe6; --muted: #93a39a; --line: #2d3b34;
+    --accent: #5fc79b; --accent-fg: #0d1914; --accent-soft: #1f3a2f; --warn: #e0a15f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121a16; --surface: #1a2420; --fg: #e4ebe6; --muted: #93a39a; --line: #2d3b34;
+  --accent: #5fc79b; --accent-fg: #0d1914; --accent-soft: #1f3a2f; --warn: #e0a15f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-block: 32px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 860px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+header { display: flex; flex-direction: column; gap: 6px; }
+h1 { font-family: var(--font-display); font-size: clamp(1.7rem, 4.5vw, 2.4rem); line-height: 1.1; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 62ch; }
+.drop {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+  padding: 36px 20px; background: var(--surface);
+  border: 2px dashed var(--line); border-radius: 6px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.drop strong { font-family: var(--font-display); font-size: 1.15rem; }
+.drop span { color: var(--muted); font-size: 0.9rem; }
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.stats { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--font-mono); font-size: 0.82rem; color: var(--muted); min-width: 0; }
+.stats b { color: var(--fg); font-weight: 500; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button {
+  font: inherit; font-weight: 500; cursor: pointer;
+  padding: 9px 16px; border-radius: 4px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--fg);
+}
+button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+button:hover { filter: brightness(0.96); }
+.note { margin: 0; font-size: 0.85rem; color: var(--muted); overflow-wrap: anywhere; }
+.note.err { color: var(--warn); }
+h2 { font-family: var(--font-display); font-size: 1.05rem; margin: 0 0 8px; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+th { font-family: var(--font-mono); font-weight: 500; font-size: 0.72rem; letter-spacing: 0.04em; color: var(--muted); background: var(--bg); }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: 0; }
+textarea {
+  width: 100%; min-height: 160px; resize: vertical;
+  font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.5;
+  padding: 12px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--surface); color: var(--fg);
+}
+.sample { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; font-weight: 400; }
+footer { color: var(--muted); font-size: 0.8rem; }
+@media (prefers-reduced-motion: reduce) { .drop { transition: none; } }
+</style>
+</head><body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+<main>
+  <header>
+    <h1>Konverter KML ke CSV</h1>
+    <p>Ubah file KMZ atau KML menjadi CSV dengan susunan kolom tetap: Latitude, Longitude, lalu atribut jaringan seperti HOMEPASS_ID, FDT_CODE, dan FAT_CODE. Semua diproses di browser Anda, tidak ada file yang dikirim ke server.</p>
+  </header>
+
+  <label class="drop" id="drop" for="file" tabindex="0">
+    <strong>Tarik file KMZ atau KML ke sini</strong>
+    <span>atau klik untuk memilih file (boleh lebih dari satu)</span>
+    <input type="file" id="file" accept=".kmz,.kml,application/vnd.google-earth.kmz,application/vnd.google-earth.kml+xml,text/xml" multiple>
+  </label>
+
+  <p class="note" id="msg"></p>
+
+  <section>
+    <div class="bar">
+      <div class="stats" id="stats"></div>
+      <div class="actions">
+        <button class="primary" id="dl" type="button" hidden>Unduh CSV</button>
+        <button class="primary" id="copy" type="button">Salin CSV</button>
+        <button id="select" type="button">Pilih semua teks</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Pratinjau tabel</h2>
+    <div class="tablewrap"><table id="table"></table></div>
+    <p class="note" id="more"></p>
+  </section>
+
+  <section>
+    <h2>Teks CSV</h2>
+    <textarea id="out" readonly spellcheck="false" aria-label="Hasil CSV"></textarea>
+    <p class="note">Salin lalu tempel ke Excel atau Google Sheets, atau simpan sebagai file .csv di editor teks.</p>
+  </section>
+
+  <footer>Hanya Placemark bertipe titik (Point) yang diubah menjadi baris. Garis dan poligon dilewati.</footer>
+</main>
+
+<script>
+(function () {
+  var ALLOW_DOWNLOAD = true;
+
+  /*CORE-START*/
+  var SCHEMA = ['Latitude', 'Longitude', 'HOMEPASS_ID', 'CLUSTER_NAME', 'PREFIX_ADDRESS', 'STREET_NAME', 'HOUSE_NUMBER', 'BLOCK', 'FLOOR', 'RT', 'RW', 'DISTRICT', 'SUB_DISTRICT', 'FDT_CODE', 'FAT_CODE', 'POLE_FAT', 'BUILDING_LATITUDE', 'BUILDING_LONGITUDE', 'Category_BizPass', 'HOME/BIZ', 'POST_CODE', 'ADDRESS_POLE___FAT', 'OV_UG', 'HOUSE_COMMENT_', 'BUILDING_NAME', 'TOWER', 'APTN', 'FIBER_NODE__HFC_', 'ID_Area', 'Clamp_Hook_ID', 'DEPLOYMENT_TYPE', 'NEED_SURVEY', 'Status Homepass', 'Reason', 'Coordinate__Lat__NEW', 'Pole_Type', 'Coordinate__Long__NEW', 'LINE', 'Pole_Provider__New_', 'Pole_ID__New_', 'FAT_ID_NETWORK_ID'];
+
+  // Nama kolom dicocokkan tanpa memperhatikan huruf besar/kecil, spasi, garis bawah, dan tanda baca.
+  function norm(s) { return String(s).toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  var SCHEMA_MAP = {};
+  SCHEMA.forEach(function (c) { SCHEMA_MAP[norm(c)] = c; });
+
+  function childText(el, tag) {
+    var n = el.getElementsByTagName(tag)[0];
+    return n ? n.textContent.trim() : '';
+  }
+
+  // Atribut bisa ada di ExtendedData (Data/SimpleData) atau di tabel HTML dalam <description>.
+  function attrsFrom(pm) {
+    var out = {}, i;
+    var data = pm.getElementsByTagName('Data');
+    for (i = 0; i < data.length; i++) {
+      var k = data[i].getAttribute('name');
+      if (k) out[k] = childText(data[i], 'value');
+    }
+    var sd = pm.getElementsByTagName('SimpleData');
+    for (i = 0; i < sd.length; i++) {
+      var k2 = sd[i].getAttribute('name');
+      if (k2) out[k2] = sd[i].textContent.trim();
+    }
+    var desc = pm.getElementsByTagName('description')[0];
+    if (desc && /<t[dh][\s>]/i.test(desc.textContent)) {
+      var html = new DOMParser().parseFromString(desc.textContent, 'text/html');
+      var trs = html.querySelectorAll('tr');
+      for (i = 0; i < trs.length; i++) {
+        var cells = trs[i].children;
+        if (cells.length < 2 || cells[0].querySelector('table') || cells[1].querySelector('table')) continue;
+        var key = cells[0].textContent.trim(), val = cells[1].textContent.trim();
+        if (key && !(key in out)) out[key] = val;
+      }
+    }
+    return out;
+  }
+
+  // Mengembalikan baris-baris CSV (objek per kolom SCHEMA). report dipakai untuk menghitung yang dilewati.
+  function parseKml(xmlText, report) {
+    var doc = new DOMParser().parseFromString(xmlText, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('Isi file bukan KML yang valid.');
+    var rows = [];
+    var pms = doc.getElementsByTagName('Placemark');
+    for (var i = 0; i < pms.length; i++) {
+      var pm = pms[i];
+      var pt = pm.getElementsByTagName('Point')[0];
+      var c = pt && pt.getElementsByTagName('coordinates')[0];
+      var p = c ? c.textContent.trim().split(/\s+/)[0].split(',') : [];
+      if (!c || !isFinite(parseFloat(p[0])) || !isFinite(parseFloat(p[1]))) { report.skipped++; continue; }
+      var row = {};
+      SCHEMA.forEach(function (col) { row[col] = ''; });
+      row.Latitude = p[1].trim();
+      row.Longitude = p[0].trim();
+      var attrs = attrsFrom(pm);
+      Object.keys(attrs).forEach(function (k) {
+        var target = SCHEMA_MAP[norm(k)];
+        if (!target) { report.unmatched[k] = true; return; }
+        if (target !== 'Latitude' && target !== 'Longitude') row[target] = attrs[k];
+      });
+      if (row.BUILDING_LATITUDE === '') row.BUILDING_LATITUDE = row.Latitude;
+      if (row.BUILDING_LONGITUDE === '') row.BUILDING_LONGITUDE = row.Longitude;
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function esc(v) {
+    v = v === undefined || v === null ? '' : String(v);
+    return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+
+  function toCsv(rows) {
+    var lines = [SCHEMA.map(esc).join(',')];
+    rows.forEach(function (r) { lines.push(SCHEMA.map(function (c) { return esc(r[c]); }).join(',')); });
+    return lines.join('\n');
+  }
+  /*CORE-END*/
+
+  // Contoh data tiruan (bukan data asli) supaya halaman langsung menampilkan hasil.
+  function buildSample() {
+    var jalan = ['MELATI', 'MELATI', 'KENANGA'];
+    var out = '<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Contoh</name><Folder><name>HP</name>';
+    for (var i = 0; i < 3; i++) {
+      var lat = (-6.200000 - i * 0.00012).toFixed(6), lon = (106.800000 + i * 0.00009).toFixed(6);
+      var d = {
+        HOMEPASS_ID: '0000000' + (i + 1), CLUSTER_NAME: 'CLUSTER CONTOH', PREFIX_ADDRESS: 'JL.', STREET_NAME: jalan[i],
+        HOUSE_NUMBER: String(10 + i), DISTRICT: 'KECAMATAN CONTOH', SUB_DISTRICT: 'KELURAHAN CONTOH',
+        FDT_CODE: 'FDT01', FAT_CODE: 'FDT01S01A0' + (1 + (i > 1 ? 1 : 0)), Category_BizPass: 'RESIDENCE', 'HOME/BIZ': 'H',
+        POST_CODE: '10110', ID_Area: 'AREA_CONTOH_001', DEPLOYMENT_TYPE: 'REGULAR', NEED_SURVEY: 'NO'
+      };
+      out += '<Placemark><name>' + d.HOMEPASS_ID + '</name><ExtendedData>';
+      Object.keys(d).forEach(function (k) { out += '<Data name="' + k + '"><value>' + d[k] + '</value></Data>'; });
+      out += '</ExtendedData><Point><coordinates>' + lon + ',' + lat + ',0</coordinates></Point></Placemark>';
+    }
+    return out + '</Folder></Document></kml>';
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var drop = $('drop'), fileInput = $('file'), msg = $('msg');
+  var current = { rows: [], name: 'hasil' };
+
+  function setMsg(t, err) { msg.className = 'note' + (err ? ' err' : ''); msg.textContent = t; }
+
+  function render(report) {
+    var rows = current.rows;
+    var t = $('table');
+    t.innerHTML = '';
+    var hr = t.createTHead().insertRow();
+    SCHEMA.forEach(function (c) { var th = document.createElement('th'); th.textContent = c; hr.appendChild(th); });
+    var body = t.createTBody();
+    rows.slice(0, 50).forEach(function (r) {
+      var tr = body.insertRow();
+      SCHEMA.forEach(function (c) {
+        var td = tr.insertCell();
+        td.textContent = r[c];
+        td.title = r[c];
+        if (c === 'Latitude' || c === 'Longitude') td.className = 'num';
+      });
+    });
+    $('more').textContent = rows.length > 50 ? 'Menampilkan 50 dari ' + rows.length + ' baris. CSV di bawah berisi semuanya.' : '';
+    var filled = SCHEMA.filter(function (c) { return rows.some(function (r) { return r[c] !== ''; }); }).length;
+    $('stats').innerHTML = '<span><b>' + rows.length + '</b> baris</span><span><b>' + filled + '</b> dari ' + SCHEMA.length + ' kolom terisi</span>' +
+      (report && report.skipped ? '<span><b>' + report.skipped + '</b> dilewati</span>' : '');
+    $('out').value = toCsv(rows);
+  }
+
+  function describe(report, nFiles) {
+    var parts = [nFiles + ' file diproses, ' + current.rows.length + ' baris.'];
+    if (report.skipped) parts.push(report.skipped + ' placemark non-titik dilewati.');
+    var un = Object.keys(report.unmatched);
+    if (un.length) parts.push('Atribut di file yang tidak ada di format CSV: ' + un.slice(0, 12).join(', ') + (un.length > 12 ? ', dan ' + (un.length - 12) + ' lainnya' : '') + '.');
+    return parts.join(' ');
+  }
+
+  function readFile(f) {
+    return new Promise(function (resolve, reject) {
+      var fr = new FileReader();
+      var isKmz = /\.kmz$/i.test(f.name);
+      fr.onload = function () { resolve(fr.result); };
+      fr.onerror = function () { reject(new Error('Gagal membaca ' + f.name)); };
+      if (isKmz) fr.readAsArrayBuffer(f); else fr.readAsText(f);
+    }).then(function (data) {
+      if (!/\.kmz$/i.test(f.name)) return [data];
+      if (typeof JSZip === 'undefined') throw new Error('Library JSZip gagal dimuat, file KMZ belum bisa dibuka. Coba muat ulang halaman.');
+      return JSZip.loadAsync(data).then(function (zip) {
+        var names = Object.keys(zip.files).filter(function (n) { return /\.kml$/i.test(n) && !zip.files[n].dir; });
+        if (!names.length) throw new Error('Tidak ada file .kml di dalam ' + f.name);
+        return Promise.all(names.map(function (n) { return zip.files[n].async('string'); }));
+      });
+    });
+  }
+
+  function handleFiles(list) {
+    var files = Array.prototype.slice.call(list).filter(function (f) { return /\.(kmz|kml)$/i.test(f.name); });
+    if (!files.length) { setMsg('Pilih file berekstensi .kmz atau .kml.', true); return; }
+    var report = { skipped: 0, unmatched: {} }, all = [], errors = [];
+    setMsg('Memproses ' + files.length + ' file...', false);
+    files.reduce(function (chain, f) {
+      return chain.then(function () {
+        return readFile(f).then(function (texts) {
+          texts.forEach(function (tx) { all = all.concat(parseKml(tx, report)); });
+        }).catch(function (e) { errors.push(f.name + ': ' + e.message); });
+      });
+    }, Promise.resolve()).then(function () {
+      if (!all.length) { setMsg(errors.join(' ') || 'Tidak ada Placemark titik yang ditemukan.', true); return; }
+      current.rows = all;
+      current.name = files.length === 1 ? files[0].name.replace(/\.(kmz|kml)$/i, '') : 'gabungan';
+      render(report);
+      setMsg(describe(report, files.length) + (errors.length ? ' Gagal: ' + errors.join(' ') : ''), errors.length > 0);
+    });
+  }
+
+  function loadSample() {
+    var report = { skipped: 0, unmatched: {} };
+    current.rows = parseKml(buildSample(), report);
+    current.name = 'contoh';
+    render(report);
+    msg.className = 'note';
+    msg.innerHTML = 'Ini data contoh tiruan. Tarik file KMZ atau KML Anda untuk menggantinya, atau <button class="sample" id="loadSample" type="button">muat ulang contoh</button>.';
+    $('loadSample').addEventListener('click', loadSample);
+  }
+
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('over'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('over'); });
+  });
+  drop.addEventListener('drop', function (e) { handleFiles(e.dataTransfer.files); });
+  drop.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+  fileInput.addEventListener('change', function () { handleFiles(fileInput.files); fileInput.value = ''; });
+
+  $('select').addEventListener('click', function () { var o = $('out'); o.focus(); o.select(); });
+  $('copy').addEventListener('click', function () {
+    var o = $('out'), btn = $('copy');
+    function ok() { btn.textContent = 'Tersalin'; setTimeout(function () { btn.textContent = 'Salin CSV'; }, 1500); }
+    function fallback() { o.focus(); o.select(); setMsg('Salin otomatis ditolak browser. Teks sudah dipilih, tekan Ctrl+C.', true); }
+    try { navigator.clipboard.writeText(o.value).then(ok, fallback); } catch (e) { fallback(); }
+  });
+
+  if (ALLOW_DOWNLOAD) {
+    $('dl').hidden = false;
+    $('dl').addEventListener('click', function () {
+      var blob = new Blob([$('out').value], { type: 'text/csv;charset=utf-8' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = current.name + '.csv';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+    });
+  }
+
+  loadSample();
+})();
+</script>
+
+</body></html>
