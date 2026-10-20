@@ -87,7 +87,10 @@ footer { color: var(--muted); font-size: 0.8rem; }
 @media (prefers-reduced-motion: reduce) { .drop { transition: none; } }
 </style>
 </head><body>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script
+  src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+  onerror="this.onerror=function(){this.onerror=null;this.src='https://unpkg.com/jszip@3.10.1/dist/jszip.min.js'};this.src='https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'">
+</script>
 
 <main>
   <header>
@@ -279,10 +282,10 @@ footer { color: var(--muted); font-size: 0.8rem; }
       if (isKmz) fr.readAsArrayBuffer(f); else fr.readAsText(f);
     }).then(function (data) {
       if (!/\.kmz$/i.test(f.name)) return [data];
-      if (typeof JSZip === 'undefined') throw new Error('Library JSZip gagal dimuat, file KMZ belum bisa dibuka. Coba muat ulang halaman.');
+      if (typeof JSZip === 'undefined') throw new Error('Library pembaca KMZ gagal dimuat dari semua CDN. Pastikan internet aktif, lalu muat ulang halaman. Jika halaman dibuka secara offline, KMZ tidak dapat dibaca.');
       return JSZip.loadAsync(data).then(function (zip) {
         var names = Object.keys(zip.files).filter(function (n) { return /\.kml$/i.test(n) && !zip.files[n].dir; });
-        if (!names.length) throw new Error('Tidak ada file .kml di dalam ' + f.name);
+        if (!names.length) throw new Error('Tidak ditemukan file .kml di dalam KMZ. Pastikan file KMZ valid dan bukan file ZIP dengan ekstensi yang diganti: ' + f.name);
         return Promise.all(names.map(function (n) { return zip.files[n].async('string'); }));
       });
     });
